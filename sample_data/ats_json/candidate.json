@@ -1,0 +1,25 @@
+{
+  "ats_id": "ats-9921",
+  "candidate_profile": {
+    "first_name": "Alexander",
+    "last_name": "Rivera",
+    "emails": ["alex.rivera@example.com"],
+    "phones": ["+1-555-0199"],
+    "location": "San Francisco, CA",
+    "skills": ["Python", "JavaScript", "FastAPI"],
+    "experience": [
+      {
+        "company": "Eightfold AI",
+        "title": "Software Engineer",
+        "dates": "2022-Present"
+      }
+    ],
+    "education": [
+      {
+        "school": "University of California, Berkeley",
+        "degree": "B.S.",
+        "major": "Electrical Engineering and Computer Science"
+      }
+    ]
+  }
+}

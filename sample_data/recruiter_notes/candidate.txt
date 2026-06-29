@@ -1,0 +1,4 @@
+Recruiter notes: Interview notes
+Alex Rivera is a frontend candidate.
+Strong hands-on experience in React.js and NodeJS.
+Candidate feedback: Positive recommendation.

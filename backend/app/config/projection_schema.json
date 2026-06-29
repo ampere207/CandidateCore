@@ -1,0 +1,41 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ProjectionConfigSchema",
+  "type": "object",
+  "properties": {
+    "selected_fields": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "List of fields to keep in output."
+    },
+    "field_mappings": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Rename keys in output, e.g. first_name -> firstName."
+    },
+    "exclude_fields": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Fields to drop from output."
+    },
+    "required_fields": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Fields that must have values."
+    },
+    "output_format": {
+      "type": "string",
+      "enum": ["json", "nested_object", "flat_dict"],
+      "default": "json"
+    }
+  },
+  "additionalProperties": false
+}
