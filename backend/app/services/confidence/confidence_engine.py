@@ -1,52 +1,102 @@
 from abc import ABC, abstractmethod
-from typing import Any, Dict
+from typing import Any, Dict, List
 from app.models.confidence import ConfidenceMetadata
 from app.models.candidate_fragment import CandidateFragment
 
 class ConfidenceEngine(ABC):
     """
-    Interface for assessing reliability metrics and calculating field/profile confidence.
+    Interface for calculating field-level and overall profile confidence.
     """
 
     @abstractmethod
-    def calculate_field_confidence(self, field_name: str, value: Any, fragment: CandidateFragment) -> ConfidenceMetadata:
+    def calculate_field_confidence(
+        self, 
+        field_name: str, 
+        value: Any, 
+        source_type: str, 
+        has_validation_errors: bool,
+        normalization_success: bool,
+        agreement_count: int
+    ) -> ConfidenceMetadata:
         """
-        Assesses confidence score for a single field extraction.
+        Computes a deterministic score between 0.0 and 1.0.
         """
         pass
 
     @abstractmethod
     def calculate_profile_completeness(self, first_name: str, last_name: str, emails: list, phones: list) -> float:
         """
-        Calculates a completeness score for a candidate profile based on field presence.
+        Measures structural profile content completeness.
         """
         pass
 
 class DefaultConfidenceEngine(ConfidenceEngine):
     """
-    Mock implementation of ConfidenceEngine for Phase 1.
+    Standard implementation of ConfidenceEngine.
+    Uses source priority, validation logs, normalization outcomes, and consensus count.
     """
+    
+    SOURCE_BASE_RELIABILITY = {
+        "ats_json": 0.95,
+        "resume_pdf": 0.85,
+        "recruiter_csv": 0.75,
+        "recruiter_notes": 0.60
+    }
 
-    def calculate_field_confidence(self, field_name: str, value: Any, fragment: CandidateFragment) -> ConfidenceMetadata:
-        # Simple heuristic based on source type
-        score = 0.5
-        if fragment.source_type == "ats_json":
-            score = 0.95
-        elif fragment.source_type == "resume_pdf":
-            score = 0.85
-        elif fragment.source_type == "recruiter_csv":
-            score = 0.70
-            
+    def calculate_field_confidence(
+        self, 
+        field_name: str, 
+        value: Any, 
+        source_type: str, 
+        has_validation_errors: bool,
+        normalization_success: bool,
+        agreement_count: int
+    ) -> ConfidenceMetadata:
+        # 1. Base score from source type
+        base_score = self.SOURCE_BASE_RELIABILITY.get(source_type, 0.50)
+        
+        # 2. Adjustments based on validation
+        validation_penalty = 0.20 if has_validation_errors else 0.0
+        
+        # 3. Adjustments based on normalization
+        normalization_bonus = 0.05 if normalization_success else -0.15
+        
+        # 4. Consensus agreement bonus (+0.10 for each matching source value)
+        consensus_bonus = min(0.20, agreement_count * 0.10)
+        
+        # Calculate final aggregated score
+        final_score = base_score - validation_penalty + normalization_bonus + consensus_bonus
+        
+        # Enforce boundary limits [0.0, 1.0]
+        final_score = max(0.0, min(1.0, final_score))
+        
+        # Round to 2 decimal places for deterministic representation
+        final_score = round(final_score, 2)
+        
+        details = {
+            "base_reliability": base_score,
+            "has_validation_warnings": has_validation_errors,
+            "normalization_status": "success" if normalization_success else "fallback",
+            "cross_source_agreements": agreement_count,
+            "bonuses": {
+                "normalization": normalization_bonus,
+                "consensus": consensus_bonus
+            },
+            "penalties": {
+                "validation": validation_penalty
+            }
+        }
+        
         return ConfidenceMetadata(
-            score=score,
-            confidence_method="heuristic_by_source",
-            assessment_details={"source_type": fragment.source_type, "field": field_name}
+            score=final_score,
+            confidence_method="multi_factor_deterministic_v1",
+            assessment_details=details
         )
 
     def calculate_profile_completeness(self, first_name: str, last_name: str, emails: list, phones: list) -> float:
         score = 0.0
         if first_name: score += 0.2
         if last_name: score += 0.2
-        if emails: score += 0.4
-        if phones: score += 0.2
-        return score
+        if emails and len(emails) > 0: score += 0.4
+        if phones and len(phones) > 0: score += 0.2
+        return round(score, 2)

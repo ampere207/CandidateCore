@@ -1,4 +1,6 @@
+import csv
 import hashlib
+import io
 from typing import Any, Dict
 from app.adapters.base_adapter import BaseAdapter
 from app.models.candidate_fragment import CandidateFragment
@@ -7,51 +9,96 @@ from app.exceptions.custom_exceptions import AdapterException, ValidationExcepti
 class CSVAdapter(BaseAdapter):
     """
     Adapter for Recruiter CSV payloads.
-    Detects based on specific CSV column structures or headers in string/bytes format.
+    Detects if the input starts with typical CSV recruiter headers.
     """
 
     def detect(self, raw_data: Any) -> bool:
-        if isinstance(raw_data, str) and ("first_name" in raw_data or "email" in raw_data) and "," in raw_data:
-            return True
-        return False
+        if not isinstance(raw_data, str):
+            return False
+        
+        # Look for headers
+        lower_data = raw_data.lower()
+        headers = ["first_name", "last_name", "email", "phone", "skills"]
+        # If we see at least two of these headers and commas, it's highly likely a recruiter CSV
+        matched_headers = sum(1 for h in headers if h in lower_data)
+        return matched_headers >= 2 and "," in raw_data
 
     def parse(self, raw_data: Any) -> Dict[str, Any]:
+        if not isinstance(raw_data, str):
+            raise AdapterException("CSV raw data must be a string")
+        
         try:
-            # Phase 1 Mock implementation: just simulate parsing lines
-            if not isinstance(raw_data, str):
-                raise ValueError("CSV raw data must be a string")
+            f = io.StringIO(raw_data.strip())
+            # Handle delimiter configuration
+            reader = csv.DictReader(f)
+            rows = list(reader)
             
-            # Simple header/row splitter for mock
-            lines = [line.strip() for line in raw_data.strip().split("\n") if line.strip()]
-            if not lines:
-                return {}
+            if not rows:
+                raise AdapterException("CSV content is empty")
             
-            headers = [h.strip() for h in lines[0].split(",")]
-            if len(lines) < 2:
-                return {}
+            # Since a CSV payload represents one candidate profile per row (or multiple rows),
+            # for identity resolution we parse the first valid candidate record row.
+            # Clean headers: remove spaces and lowercase
+            raw_parsed = {}
+            row = rows[0]
+            for key, val in row.items():
+                if key:
+                    clean_key = key.strip().lower()
+                    raw_parsed[clean_key] = val.strip() if val else ""
             
-            values = [v.strip() for v in lines[1].split(",")]
-            parsed_dict = dict(zip(headers, values))
-            return parsed_dict
+            return raw_parsed
         except Exception as e:
-            raise AdapterException(f"CSV parsing error: {str(e)}")
+            raise AdapterException(f"CSV format parsing error: {str(e)}")
 
     def validate(self, raw_parsed: Dict[str, Any]) -> bool:
-        # Require email or phone for validation
+        # Check required fields
         if not raw_parsed.get("email") and not raw_parsed.get("phone"):
-            raise ValidationException("CSV record must contain either 'email' or 'phone' to be unique.")
+            raise ValidationException("CSV record must contain either 'email' or 'phone' for identification.")
         return True
 
     def normalize(self, raw_parsed: Dict[str, Any], source_id: str) -> CandidateFragment:
-        # Basic parsing & mapping to fragment schema
-        first_name = raw_parsed.get("first_name")
-        last_name = raw_parsed.get("last_name")
+        # Field mapping and extraction
+        first_name = raw_parsed.get("first_name") or raw_parsed.get("firstname") or None
+        last_name = raw_parsed.get("last_name") or raw_parsed.get("lastname") or None
+        
         email = raw_parsed.get("email")
+        emails = [email] if email else []
+        
         phone = raw_parsed.get("phone")
+        phones = [phone] if phone else []
+        
+        location = raw_parsed.get("location") or raw_parsed.get("address") or None
+        
+        # Skills delimiter is typically semicolon or comma
         skills_raw = raw_parsed.get("skills", "")
-        skills = [s.strip() for s in skills_raw.split(";") if s.strip()] if skills_raw else []
+        skills = []
+        if skills_raw:
+            delim = ";" if ";" in skills_raw else ","
+            skills = [s.strip() for s in skills_raw.split(delim) if s.strip()]
 
-        raw_str = str(raw_parsed)
+        # Experience parse: CSV might have flat strings.
+        experience = []
+        company = raw_parsed.get("company")
+        title = raw_parsed.get("title")
+        years = raw_parsed.get("experience_years") or raw_parsed.get("experience")
+        if company or title:
+            experience.append({
+                "company": company or "Unknown",
+                "title": title or "Software Engineer",
+                "dates": f"{years} years" if years else ""
+            })
+
+        # Education parse
+        education = []
+        school = raw_parsed.get("school") or raw_parsed.get("university")
+        degree = raw_parsed.get("degree")
+        if school:
+            education.append({
+                "school": school,
+                "degree": degree or "B.S."
+            })
+
+        raw_str = str(sorted(raw_parsed.items()))
         sha_hash = hashlib.sha256(raw_str.encode("utf-8")).hexdigest()
 
         return CandidateFragment(
@@ -61,8 +108,11 @@ class CSVAdapter(BaseAdapter):
             raw_data_hash=sha_hash,
             first_name=first_name,
             last_name=last_name,
-            emails=[email] if email else [],
-            phones=[phone] if phone else [],
+            emails=emails,
+            phones=phones,
+            location=location,
             skills=skills,
+            experience=experience,
+            education=education,
             raw_payload=raw_parsed
         )

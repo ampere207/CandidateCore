@@ -46,6 +46,7 @@ export interface PipelineRunResponse {
   processed_sources: string[];
   errors: Array<{
     source?: string;
+    field?: string;
     error_type: string;
     message: string;
     critical: boolean;
@@ -102,5 +103,13 @@ export const enrichCandidate = async (candidate: CanonicalCandidate): Promise<Ca
  */
 export const checkHealth = async (): Promise<{ status: string; timestamp: string; service: string }> => {
   const response = await apiClient.get('/health');
+  return response.data;
+};
+
+/**
+ * Retrieves a canonical candidate profile by ID.
+ */
+export const getCandidate = async (id: string): Promise<CanonicalCandidate> => {
+  const response = await apiClient.get<CanonicalCandidate>(`/pipeline/candidate/${id}`);
   return response.data;
 };

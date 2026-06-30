@@ -5,6 +5,16 @@ from app.models.field_metadata import FieldMetadata
 
 T = TypeVar('T')
 
+class CompetingValue(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    
+    value: Any = Field(..., description="The raw or partially normalized competing value")
+    source_id: str = Field(..., description="The source identification tag")
+    source_type: str = Field(..., description="Source format type (e.g. recruiter_csv)")
+    confidence_score: float = Field(..., description="Score calculated by the confidence engine")
+    normalization_success: bool = Field(True, description="Whether normalization succeeded")
+    validation_success: bool = Field(True, description="Whether validation checks passed")
+
 class CanonicalField(BaseModel, Generic[T]):
     model_config = ConfigDict(frozen=True)
 
@@ -19,6 +29,14 @@ class CanonicalField(BaseModel, Generic[T]):
     history: List[FieldMetadata] = Field(
         default_factory=list, 
         description="List of all other candidate values from other sources used in conflict resolution/merging"
+    )
+    competing_values: List[CompetingValue] = Field(
+        default_factory=list, 
+        description="Flat audit trace of all competing input entries for this attribute"
+    )
+    selection_reason: str = Field(
+        "", 
+        description="Detailed logical explanation of why this specific value won over competitors"
     )
 
 class CanonicalCandidate(BaseModel):

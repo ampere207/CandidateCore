@@ -1,5 +1,5 @@
 import uuid
-from typing import List, Optional
+from typing import List, Dict, Optional
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
 from app.models.canonical_candidate import CanonicalCandidate
 from app.models.pipeline_status import PipelineStatus
@@ -11,7 +11,7 @@ from app.api.dependencies import (
     get_provenance_engine
 )
 from app.services.validation.validation_service import ValidationService
-from app.services.merge.merge_engine import MergeEngine
+from app.services.merge.merge_engine import MergeEngine, DefaultMergeEngine
 from app.services.confidence.confidence_engine import ConfidenceEngine
 from app.services.provenance.provenance_engine import ProvenanceEngine
 from app.adapters.csv_adapter import CSVAdapter
@@ -31,13 +31,14 @@ ADAPTERS = [
     RecruiterNotesAdapter()
 ]
 
+# Global in-memory storage to maintain resolved profiles for Phase 2 API retrieval
+CANDIDATE_STORE: Dict[str, CanonicalCandidate] = {}
+
 @router.post("/pipeline/run", response_model=PipelineStatus)
 async def run_pipeline(
     files: List[UploadFile] = File(..., description="Upload heterogeneous candidate files to run canonicalization"),
     validation_service: ValidationService = Depends(get_validation_service),
-    merge_engine: MergeEngine = Depends(get_merge_engine),
-    confidence_engine: ConfidenceEngine = Depends(get_confidence_engine),
-    provenance_engine: ProvenanceEngine = Depends(get_provenance_engine)
+    merge_engine: MergeEngine = Depends(get_merge_engine)
 ):
     """
     Executes the candidate canonicalization pipeline.
@@ -55,13 +56,10 @@ async def run_pipeline(
         pipeline_status.processed_sources.append(filename)
         
         try:
-            # Read content bytes
             content_bytes = await file.read()
             
-            # Detect which adapter matches this file format
+            # Detect adapter
             matched_adapter = None
-            
-            # Helper to decode content if text-based
             content_str = None
             try:
                 content_str = content_bytes.decode("utf-8")
@@ -76,22 +74,21 @@ async def run_pipeline(
                     break
                     
             if not matched_adapter:
-                # If we cannot auto-detect, fallback to checking extensions
                 if filename.endswith(".csv"):
-                    matched_adapter = ADAPTERS[0] # CSVAdapter
+                    matched_adapter = ADAPTERS[0]
                 elif filename.endswith(".json"):
-                    matched_adapter = ADAPTERS[1] # ATSAdapter
+                    matched_adapter = ADAPTERS[1]
                 elif filename.endswith(".pdf"):
-                    matched_adapter = ADAPTERS[2] # ResumeAdapter
+                    matched_adapter = ADAPTERS[2]
                 else:
-                    matched_adapter = ADAPTERS[3] # RecruiterNotesAdapter (txt)
+                    matched_adapter = ADAPTERS[3]
             
-            # Ingest, parse, validate, and normalize
+            # Parse, Validate, Normalize
             raw_parsed = matched_adapter.parse(detect_payload)
             matched_adapter.validate(raw_parsed)
             fragment = matched_adapter.normalize(raw_parsed, source_id=filename)
             
-            # Field-level verification checking
+            # Record validation warnings
             field_errors = validation_service.validate_fragment(fragment)
             if field_errors:
                 pipeline_status.errors.extend(field_errors)
@@ -100,7 +97,6 @@ async def run_pipeline(
             logger.info(f"Successfully processed file: {filename} into fragment {fragment.fragment_id}")
             
         except Exception as e:
-            # Fail field/source, never crash pipeline run
             err_msg = f"Failed to ingest source file {filename}: {str(e)}"
             logger.error(err_msg, exc_info=True)
             pipeline_status.errors.append({
@@ -116,13 +112,15 @@ async def run_pipeline(
         return pipeline_status
 
     try:
-        # Merge fragments into one unified profile
+        # Merge fragments
         canonical_profile = merge_engine.merge(fragments)
         pipeline_status.candidate_id = canonical_profile.candidate_id
         
-        # Save mock metadata or store reference
+        # Store resolved candidate
+        CANDIDATE_STORE[canonical_profile.candidate_id] = canonical_profile
+        
         pipeline_status.status = "COMPLETED"
-        logger.info(f"Pipeline job {job_id} successfully completed. Canonical Candidate ID: {canonical_profile.candidate_id}")
+        logger.info(f"Pipeline job {job_id} completed. Candidate ID: {canonical_profile.candidate_id}")
     except Exception as e:
         pipeline_status.status = "FAILED"
         pipeline_status.errors.append({
@@ -134,3 +132,12 @@ async def run_pipeline(
         logger.error(f"Pipeline job {job_id} failed at merge stage: {str(e)}")
 
     return pipeline_status
+
+@router.get("/pipeline/candidate/{candidate_id}", response_model=CanonicalCandidate)
+async def get_candidate(candidate_id: str):
+    """
+    Queries and returns a resolved Canonical Candidate Profile by ID.
+    """
+    if candidate_id not in CANDIDATE_STORE:
+        raise HTTPException(status_code=404, detail="Canonical Candidate Profile not found")
+    return CANDIDATE_STORE[candidate_id]

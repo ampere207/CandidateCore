@@ -19,14 +19,12 @@ class ProjectionEngine(ABC):
 class DefaultProjectionEngine(ProjectionEngine):
     """
     Core implementation of the ProjectionEngine mapping and transforming fields.
+    Supports inclusion, exclusion, renaming, and nested object path mappings.
     """
 
     def project(self, candidate: CanonicalCandidate, config: ProjectionConfig) -> Dict[str, Any]:
         try:
             output = {}
-            candidate_dict = candidate.model_dump()
-            
-            # Map canonical attributes
             fields_to_process = [
                 "first_name", "last_name", "emails", "phones", "location", "skills", "experience", "education"
             ]
@@ -43,15 +41,15 @@ class DefaultProjectionEngine(ProjectionEngine):
                 # Get value (extracting resolved value from CanonicalField wrapper)
                 field_wrapper = getattr(candidate, field, None)
                 val = field_wrapper.value if field_wrapper is not None else None
-                
-                # 4. Map output key name
-                target_key = config.field_mappings.get(field, field)
-                output[target_key] = val
 
-            # 5. Validate that all required fields are present and non-empty in final output
+                # 3. Map output key name and support nested object paths (dot-notation e.g. "name.first")
+                target_key = config.field_mappings.get(field, field)
+                self._set_nested_value(output, target_key, val)
+
+            # 4. Validate that all required fields are present and non-empty in final output
             for req in config.required_fields:
                 target_key = config.field_mappings.get(req, req)
-                if target_key not in output or output[target_key] is None or (isinstance(output[target_key], list) and not output[target_key]):
+                if not self._has_nested_value(output, target_key):
                     raise ProjectionException(f"Required field '{req}' is missing or empty in the projected output.")
 
             # Always preserve candidate_id in projection output for mapping reference
@@ -62,3 +60,33 @@ class DefaultProjectionEngine(ProjectionEngine):
             raise
         except Exception as e:
             raise ProjectionException(f"Error executing projection: {str(e)}")
+
+    def _set_nested_value(self, d: Dict[str, Any], path: str, value: Any) -> None:
+        """
+        Sets a value in a nested dictionary using dot notation (e.g. "name.first_name" -> d["name"]["first_name"]).
+        """
+        if value is None:
+            return
+            
+        keys = path.split(".")
+        current = d
+        for key in keys[:-1]:
+            current = current.setdefault(key, {})
+        current[keys[-1]] = value
+
+    def _has_nested_value(self, d: Dict[str, Any], path: str) -> bool:
+        """
+        Checks if a nested dictionary has a non-empty value at a dot-notated path.
+        """
+        keys = path.split(".")
+        current = d
+        for key in keys:
+            if not isinstance(current, dict) or key not in current:
+                return False
+            current = current[key]
+            
+        # Check empty lists/strings
+        if current is None or (isinstance(current, (list, dict, str)) and not current):
+            return False
+            
+        return True
