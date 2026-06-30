@@ -301,7 +301,7 @@ class DefaultMergeEngine(MergeEngine):
             competing_list.append(comp_val)
 
             # Store best metadata for each unique normalized value
-            if norm_val not in normalized_unique or conf_meta.score > normalized_unique[norm_val][1].confidence.score:
+            if norm_val not in normalized_unique or conf_meta.score > normalized_unique[norm_val][0].confidence.score:
                 normalized_unique[norm_val] = (field_meta, orig_frag)
             else:
                 history_list.append(field_meta)

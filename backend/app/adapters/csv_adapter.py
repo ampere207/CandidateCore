@@ -16,12 +16,12 @@ class CSVAdapter(BaseAdapter):
         if not isinstance(raw_data, str):
             return False
         
-        # Look for headers
-        lower_data = raw_data.lower()
-        headers = ["first_name", "last_name", "email", "phone", "skills"]
-        # If we see at least two of these headers and commas, it's highly likely a recruiter CSV
-        matched_headers = sum(1 for h in headers if h in lower_data)
-        return matched_headers >= 2 and "," in raw_data
+        # Look for headers in the first line
+        first_line = raw_data.strip().split('\n')[0].lower()
+        headers = ["name", "email", "phone", "skills", "company", "title"]
+        # If we see at least two of these headers and commas on the FIRST line, it's a CSV
+        matched_headers = sum(1 for h in headers if h in first_line)
+        return matched_headers >= 2 and "," in first_line
 
     def parse(self, raw_data: Any) -> Dict[str, Any]:
         if not isinstance(raw_data, str):

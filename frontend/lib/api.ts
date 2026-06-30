@@ -181,8 +181,8 @@ export const runPipeline = async (files: File[], enableEnrichment: boolean = fal
 export const projectCandidate = async (
   candidateId: string,
   config: ProjectionConfig
-): Promise<{ success: boolean; projected_data: CandidateOutput }> => {
-  const response = await apiClient.post<{ success: boolean; projected_data: CandidateOutput }>(
+): Promise<CandidateOutput> => {
+  const response = await apiClient.post<CandidateOutput>(
     `/projection/${candidateId}`,
     config
   );

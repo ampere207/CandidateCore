@@ -157,7 +157,7 @@ export default function PipelinePage() {
         output_format: 'json'
       };
       const response = await projectCandidate(canonicalCandidate.candidate_id, config);
-      setProjectedOutput(response.projected_data);
+      setProjectedOutput(response);
     } catch (err) {
       console.error(err);
     } finally {
