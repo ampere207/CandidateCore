@@ -1,8 +1,31 @@
+import os
 import re
+import time
 from datetime import datetime, timezone
 from abc import ABC, abstractmethod
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
+from pydantic import BaseModel, Field
+from google import genai
+from google.genai import types
 from app.models.canonical_candidate import CanonicalCandidate
+from app.logging.logger import logger
+from app.exceptions.custom_exceptions import EnrichmentException
+from app.config.settings import settings
+
+class GeminiSemanticEnrichment(BaseModel):
+    """
+    Structured Pydantic schema for Gemini 2.5 Flash semantic enrichment outputs.
+    Ensures validated, machine-readable JSON structure.
+    """
+    professional_summary: str = Field(description="A concise summary of the candidate's career highlights.")
+    core_strengths: List[str] = Field(description="List of key technical or core strengths.")
+    recommended_roles: List[str] = Field(description="List of recommended position titles or functions.")
+    technical_highlights: List[str] = Field(description="List of specific technical milestones or achievements.")
+    leadership_signals: List[str] = Field(description="List of traits showing team leadership, project ownership, or initiative.")
+    communication_signals: List[str] = Field(description="List of observations regarding communication skills, collaboration styles, or articulacy.")
+    interview_focus_areas: List[str] = Field(description="Key technical or interpersonal topics that require deep-diving during live interviews.")
+    potential_concerns: List[str] = Field(description="Red flags or gaps in candidate timelines, technology churn, or role tenures.")
+    recruiter_insights: str = Field(description="Strategic feedback or synthesis suggestions to help match the candidate with target teams.")
 
 class SemanticEnrichmentEngine(ABC):
     """
@@ -10,17 +33,17 @@ class SemanticEnrichmentEngine(ABC):
     """
 
     @abstractmethod
-    def enrich(self, candidate: CanonicalCandidate) -> CanonicalCandidate:
+    async def enrich(self, candidate: CanonicalCandidate) -> CanonicalCandidate:
         pass
 
 class DefaultSemanticEnrichmentEngine(SemanticEnrichmentEngine):
     """
     Standard Semantic Enrichment Engine.
-    Processes recruiter notes and extracts structured insights to enrich candidate metadata.
-    Enforces a strict policy that no factual fields are modified.
+    Processes recruiter notes and calls Gemini 2.5 Flash to extract validated structured insights.
+    Fails safe to default fallback values if the model is unreachable or unavailable.
     """
 
-    def enrich(self, candidate: CanonicalCandidate) -> CanonicalCandidate:
+    async def enrich(self, candidate: CanonicalCandidate) -> CanonicalCandidate:
         # Find raw recruiter notes text from field histories or fragment payload traces
         notes_text = ""
         
@@ -42,59 +65,112 @@ class DefaultSemanticEnrichmentEngine(SemanticEnrichmentEngine):
                     break
 
         if not notes_text:
-            notes_text = "Recruiter notes: Interview feedback for Candidate.\nStrong skills. Good observations."
+            notes_text = "Recruiter notes: No interview writeups provided."
 
-        first_name = candidate.first_name.value if candidate.first_name else "Candidate"
-        last_name = candidate.last_name.value if candidate.last_name else ""
-        full_name = f"{first_name} {last_name}".strip()
+        api_key = settings.gemini_api_key
         
-        skills_list = candidate.skills.value if candidate.skills else []
-        skills_str = ", ".join(skills_list) if skills_list else "software development"
-        
-        prof_summary = (
-            f"Senior professional candidate {full_name} with demonstrated technical expertise "
-            f"in {skills_str}. Lineage verification shows cross-source consolidation across "
-            f"{candidate.metadata.get('resolved_sources_count', 1)} verified ingestion endpoints."
-        )
-
-        strengths = [f"Strong capabilities in {s}" for s in skills_list[:3]]
-        if "frontend" in notes_text.lower() or "react" in notes_text.lower():
-            strengths.append("High experience with UI/UX layout design systems")
-        if "backend" in notes_text.lower() or "python" in notes_text.lower():
-            strengths.append("Experienced in cloud architecture and backend system routing designs")
-        if "architect" in notes_text.lower():
-            strengths.append("Demonstrates technical leadership and system design capabilities")
-
-        role_pref = "Not specified"
-        pref_match = re.search(r"role preferences:\s*(.*)", notes_text, re.IGNORECASE)
-        if pref_match:
-            role_pref = pref_match.group(1).strip()
-        else:
-            if "remote" in notes_text.lower():
-                role_pref = "Remote software engineering roles"
-            elif "senior" in notes_text.lower():
-                role_pref = "Senior Technical Contributor positions"
-
-        synopsis = "Recruiter interview feedback notes parsed successfully."
-        feedback_match = re.search(r"candidate feedback:\s*(.*)", notes_text, re.IGNORECASE)
-        if feedback_match:
-            synopsis = feedback_match.group(1).strip()
-        else:
-            sentences = [s.strip() for s in notes_text.split(".") if s.strip()]
-            if len(sentences) > 1:
-                synopsis = f"Interview notes highlight: {sentences[-1]}."
-
-        enrichment_insights = {
-            "professional_summary": prof_summary,
-            "inferred_strengths": strengths,
-            "role_preferences": role_pref,
-            "recruiter_synopsis": synopsis,
-            "enriched_at": datetime.now(timezone.utc).isoformat()
+        # Default fallback structure for fail-safe capability
+        fallback_insights = {
+            "professional_summary": "AI enrichment unavailable.",
+            "core_strengths": ["AI enrichment unavailable."],
+            "recommended_roles": ["AI enrichment unavailable."],
+            "technical_highlights": ["AI enrichment unavailable."],
+            "leadership_signals": ["AI enrichment unavailable."],
+            "communication_signals": ["AI enrichment unavailable."],
+            "interview_focus_areas": ["AI enrichment unavailable."],
+            "potential_concerns": ["AI enrichment unavailable."],
+            "recruiter_insights": "AI enrichment unavailable.",
+            "enriched_at": datetime.now(timezone.utc).isoformat(),
+            "success": False
         }
 
-        candidate_dict = candidate.model_dump()
-        candidate_dict["metadata"] = dict(candidate_dict.get("metadata", {}))
-        candidate_dict["metadata"]["semantic_enrichment"] = enrichment_insights
-        candidate_dict["metadata"]["semantic_enrichment_applied"] = True
+        if not api_key:
+            logger.warning(
+                "Gemini Enrichment skipped: GEMINI_API_KEY environment variable is not defined.",
+                extra={"extra_context": {"action": "enrichment_skipped_no_key"}}
+            )
+            candidate_dict = candidate.model_dump()
+            candidate_dict["metadata"] = dict(candidate_dict.get("metadata", {}))
+            candidate_dict["metadata"]["semantic_enrichment"] = fallback_insights
+            candidate_dict["metadata"]["semantic_enrichment_applied"] = True
+            return CanonicalCandidate(**candidate_dict)
 
-        return CanonicalCandidate(**candidate_dict)
+        start_time = time.time()
+        logger.info(
+            "Enrichment Started", 
+            extra={"extra_context": {
+                "action": "enrichment_started", 
+                "candidate_id": candidate.candidate_id,
+                "model": "gemini-2.5-flash"
+            }}
+        )
+
+        try:
+            # Initialize official GenAI client using api_key
+            client = genai.Client(api_key=api_key)
+            
+            prompt = f"""
+            You are an expert technical recruiting advisor at Eightfold AI.
+            Your task is to analyze a candidate's Canonical Master Profile and the original Recruiter Notes,
+            and generate high-level semantic insights.
+            
+            Canonical Candidate Master Profile:
+            {candidate.model_dump_json(indent=2)}
+            
+            Original Recruiter Notes:
+            {notes_text}
+            """
+            
+            response = await client.aio.models.generate_content(
+                model='gemini-2.5-flash',
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_schema=GeminiSemanticEnrichment,
+                ),
+            )
+            
+            # Validate structured response text with Pydantic
+            insights_model = GeminiSemanticEnrichment.model_validate_json(response.text)
+            insights = insights_model.model_dump()
+            insights["enriched_at"] = datetime.now(timezone.utc).isoformat()
+            insights["success"] = True
+            
+            latency = time.time() - start_time
+            tokens_used = None
+            if response.usage_metadata:
+                tokens_used = response.usage_metadata.total_token_count
+                
+            logger.info(
+                "Enrichment Completed",
+                extra={"extra_context": {
+                    "action": "enrichment_completed",
+                    "candidate_id": candidate.candidate_id,
+                    "latency_seconds": round(latency, 3),
+                    "tokens_used": tokens_used
+                }}
+            )
+            
+            candidate_dict = candidate.model_dump()
+            candidate_dict["metadata"] = dict(candidate_dict.get("metadata", {}))
+            candidate_dict["metadata"]["semantic_enrichment"] = insights
+            candidate_dict["metadata"]["semantic_enrichment_applied"] = True
+            return CanonicalCandidate(**candidate_dict)
+
+        except Exception as e:
+            latency = time.time() - start_time
+            logger.error(
+                f"Failures: Semantic enrichment error: {str(e)}",
+                extra={"extra_context": {
+                    "action": "enrichment_failed",
+                    "candidate_id": candidate.candidate_id,
+                    "latency_seconds": round(latency, 3),
+                    "error": str(e)
+                }}
+            )
+            
+            candidate_dict = candidate.model_dump()
+            candidate_dict["metadata"] = dict(candidate_dict.get("metadata", {}))
+            candidate_dict["metadata"]["semantic_enrichment"] = fallback_insights
+            candidate_dict["metadata"]["semantic_enrichment_applied"] = True
+            return CanonicalCandidate(**candidate_dict)

@@ -10,7 +10,7 @@ class CompanyNormalizer(Normalizer):
 
     def normalize(self, value: Any) -> str:
         if not isinstance(value, str):
-            raise NormalizationException("Company name value must be a string string")
+            raise NormalizationException("Company name value must be a string")
             
         cleaned = value.strip()
         if not cleaned:

@@ -77,10 +77,49 @@ class DefaultMergeEngine(MergeEngine):
             phones=phones_field.value if phones_field else []
         )
 
+        linkedin = None
+        github = None
+        portfolio = None
+        other_links = []
+        headline = None
+        
+        import re
+        for frag in fragments:
+            raw = frag.raw_payload or {}
+            if not linkedin:
+                linkedin = raw.get("linkedin_url") or raw.get("linkedin") or raw.get("candidate_profile", {}).get("linkedin")
+            if not github:
+                github = raw.get("github_url") or raw.get("github") or raw.get("candidate_profile", {}).get("github")
+            if not portfolio:
+                portfolio = raw.get("portfolio_url") or raw.get("portfolio") or raw.get("website") or raw.get("candidate_profile", {}).get("portfolio")
+            
+            if not headline:
+                headline = raw.get("headline") or raw.get("candidate_profile", {}).get("headline") or raw.get("role_preferences")
+                
+            if isinstance(raw.get("raw_text"), str):
+                text = raw["raw_text"]
+                urls = re.findall(r'https?://[^\s<>"]+|www\.[^\s<>"]+', text)
+                for url in urls:
+                    url_lower = url.lower()
+                    if "linkedin.com" in url_lower:
+                        if not linkedin: linkedin = url
+                    elif "github.com" in url_lower:
+                        if not github: github = url
+                    else:
+                        if url not in other_links:
+                            other_links.append(url)
+
         metadata = {
             "completeness_score": overall_completeness,
             "resolved_sources_count": len(fragments),
-            "merged_at": datetime.now(timezone.utc).isoformat()
+            "merged_at": datetime.now(timezone.utc).isoformat(),
+            "links": {
+                "linkedin": linkedin,
+                "github": github,
+                "portfolio": portfolio,
+                "other": other_links
+            },
+            "headline": headline
         }
 
         return CanonicalCandidate(

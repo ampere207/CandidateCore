@@ -80,11 +80,17 @@ class ResumeAdapter(BaseAdapter):
         emails = list(set(re.findall(r"[\w\.-]+@[\w\.-]+\.\w+", text)))
         phones = list(set(re.findall(r"\+?\d[\d -]{7,}\d", text)))
         
-        # 3. Location extraction via standard city/state pattern (e.g. San Francisco, CA)
+        # 3. Location extraction via standard city/state pattern (e.g. San Francisco, CA or Bangalore, India)
         location = None
-        loc_match = re.search(r"([A-Z][a-zA-Z\s]{2,}),\s*([A-Z]{2})", text)
-        if loc_match:
-            location = f"{loc_match.group(1).strip()}, {loc_match.group(2).strip()}"
+        for line in lines[:15]:
+            loc_match = re.search(r"([A-Z][a-zA-Z\s]{2,}),\s*([A-Z]{2,}|[A-Z][a-zA-Z\s]{2,})", line)
+            # Avoid false positives like "Bachelor of Science, University"
+            if loc_match and not any(k in line.lower() for k in ["university", "college", "school", "bachelor", "master", "degree"]):
+                city = loc_match.group(1).strip()
+                region = loc_match.group(2).strip()
+                if len(city) < 30 and len(region) < 30:
+                    location = f"{city}, {region}"
+                    break
 
         # 4. Skills extraction: Section parse + vocabulary matching
         skills = set()
@@ -192,5 +198,5 @@ class ResumeAdapter(BaseAdapter):
             skills=sorted(list(skills)),
             experience=experience,
             education=education,
-            raw_payload={"mock_text_len": len(text)}
+            raw_payload={"raw_text": text}
         )

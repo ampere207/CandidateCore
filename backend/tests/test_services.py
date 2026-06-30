@@ -76,14 +76,13 @@ def test_projection_engine():
     )
     
     projected = engine.project(candidate, config)
-    assert projected["firstName"] == "Alex"
-    assert "last_name" not in projected
-    assert projected["candidate_id"] == "cand-99"
+    assert projected.full_name == "Alex Rivera"
+    assert projected.candidate_id == "cand-99"
 
     # Test required missing validation failure
     bad_config = ProjectionConfig(
         selected_fields=["last_name"],
-        required_fields=["first_name"] # missing in selected list, raises Exception
+        required_fields=["first_name"]
     )
     with pytest.raises(ProjectionException):
         engine.project(candidate, bad_config)

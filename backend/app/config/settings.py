@@ -36,6 +36,11 @@ class Settings(BaseSettings):
         validation_alias="SOURCE_PRIORITY_LIST"
     )
 
+    gemini_api_key: str | None = Field(
+        None,
+        validation_alias="GEMINI_API_KEY"
+    )
+
     model_config = SettingsConfigDict(
         env_file=".env", 
         env_file_encoding="utf-8", 

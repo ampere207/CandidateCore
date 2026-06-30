@@ -3,6 +3,9 @@
 
 set -e
 
+# Move to the repository root directory
+cd "$(dirname "$0")/.."
+
 echo "=== Setting up Backend Virtual Environment ==="
 if [ ! -d "backend/.venv" ]; then
     python3 -m venv backend/.venv

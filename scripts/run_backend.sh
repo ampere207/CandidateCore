@@ -3,6 +3,9 @@
 
 set -e
 
+# Move to the repository root directory
+cd "$(dirname "$0")/.."
+
 # Path to virtual env python execution
 PYTHON_EXEC="backend/.venv/bin/python"
 
