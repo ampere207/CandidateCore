@@ -1,0 +1,35 @@
+Candidate Screening Notes - Rahul Sharma
+
+Date: October 14, 2023
+Interviewer: Sarah Jenkins (Technical Recruiter)
+
+General Overview:
+Spoke with Rahul today regarding the Senior Backend Engineer position. He is currently based in Bengaluru and working at Razorpay. He has about 3 years and 8 months of experience. Rahul came across as highly articulate and very passionate about distributed systems.
+
+Communication & Culture Fit:
+Communication is extremely clear and concise. He was able to explain complex architectural decisions without getting bogged down in unnecessary details, which shows great clarity of thought. He seems to index highly on ownership—mentioned several times how he took end-to-end responsibility for the payment reconciliation service at his current company when the tech lead was on leave. He aligns well with our culture of high autonomy.
+
+Technical & System Design Observations:
+We discussed his backend knowledge extensively. He has strong fundamentals in Python and Go, with a solid history in Java from his early days at Swiggy. He has hands-on experience dealing with high-throughput microservices. 
+He detailed his experience with AWS, specifically EKS (Kubernetes) and Docker. I asked him about database bottlenecks, and he gave a great overview of how he diagnosed slow PostgreSQL queries and implemented a Redis read-through cache to reduce latency by 40%.
+He also mentioned utilizing Kafka for asynchronous event processing in their checkout flow. He seems well-versed in building REST APIs and understands idempotency well. 
+
+Career Goals & Motivation:
+He is looking to move away from purely maintenance work and wants to join a team where he can build scalable systems from scratch. He specifically mentioned wanting more exposure to multi-region cloud architectures, which aligns perfectly with our Platform team's roadmap. 
+
+Logistics:
+- Email on file: rahul.sharma@gmail.com
+- Notice Period: Officially 60 days, but he believes he can buy it out to 30 days if the offer is right.
+- Salary Expectations: Currently at 28 LPA. Expecting a bump to around 35 LPA.
+
+Strengths:
+- Deep understanding of distributed systems and microservices.
+- Strong ownership signals and leadership potential (mentored two interns recently).
+- Excellent communication skills.
+
+Weaknesses / Potential Risks:
+- Has some minor tech stack churn (moved from Java to Go to Python rapidly). We need to ensure he understands language fundamentals deeply rather than just surface-level syntax.
+- His tenure at Swiggy was roughly 2.5 years, and he's been at Razorpay for just over 1 year. Need to probe on his reasons for leaving so soon to rule out any flight-risk concerns.
+
+Interview Recommendation & Suggested Teams:
+Strong YES for the next round. I recommend targeting him for the Core Platform Team or the Distributed Data Team. Please focus the technical interview heavily on System Design Scalability and ensure he takes the lead in the whiteboard architecture round.

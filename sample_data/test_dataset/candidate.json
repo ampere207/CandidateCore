@@ -1,0 +1,43 @@
+{
+  "candidate_profile": {
+    "first_name": "Rahul",
+    "last_name": "Sharma",
+    "headline": "Senior Backend Engineer | Scalable Systems",
+    "emails": ["rahul.sharma@gmail.com"],
+    "phones": ["9876543210"],
+    "location": "Bangalore",
+    "linkedin": "https://linkedin.com/in/rahulsharma-backend",
+    "github": "https://github.com/rahul-sharma-dev",
+    "total_experience_years": 4,
+    "skills": [
+      "Python", "Go", "Java", "Docker", "Kubernetes",
+      "AWS", "PostgreSQL", "Redis", "REST APIs", "System Design"
+    ],
+    "experience": [
+      {
+        "company": "Razorpay Technologies",
+        "title": "Senior Backend Engineer",
+        "start_date": "2023-01",
+        "end_date": "current",
+        "description": "Led development of high-throughput payment gateways. Optimized database queries and introduced Redis caching."
+      },
+      {
+        "company": "Swiggy",
+        "title": "Software Engineer",
+        "start_date": "2020-08",
+        "end_date": "2022-12",
+        "description": "Developed microservices in Java and Go for the logistics team. Improved order assignment algorithm."
+      }
+    ],
+    "education": [
+      {
+        "school": "NIT Trichy",
+        "degree": "B.Tech in Computer Science",
+        "graduation_year": 2020
+      }
+    ],
+    "certifications": [
+      "AWS Certified Solutions Architect"
+    ]
+  }
+}

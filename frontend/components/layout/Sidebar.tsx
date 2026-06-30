@@ -10,10 +10,7 @@ export const Sidebar: React.FC = () => {
   const pathname = usePathname();
 
   const links = [
-    { name: 'Canonicalization Run', href: '/', icon: RefreshCw },
-    { name: 'Identity Resolution', href: '#', icon: Layers, disabled: true },
-    { name: 'Lineage Explainability', href: '#', icon: Database, disabled: true },
-    { name: 'Target Projections', href: '#', icon: Settings, disabled: true }
+    { name: 'Canonicalization Run', href: '/', icon: RefreshCw }
   ];
 
   return (
@@ -27,23 +24,6 @@ export const Sidebar: React.FC = () => {
         {links.map((link) => {
           const Icon = link.icon;
           const isActive = pathname === link.href;
-          
-          if (link.disabled) {
-            return (
-              <div
-                key={link.name}
-                className="flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium text-neutral-600 cursor-not-allowed select-none"
-              >
-                <div className="flex items-center space-x-3">
-                  <Icon className="w-4 h-4" />
-                  <span>{link.name}</span>
-                </div>
-                <span className="text-[9px] bg-neutral-900 border border-neutral-800 text-neutral-500 px-1.5 py-0.5 rounded-md">
-                  Phase 2
-                </span>
-              </div>
-            );
-          }
 
           return (
             <Link
