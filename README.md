@@ -116,6 +116,10 @@ You will need two separate terminal windows to run both the backend and frontend
 
 CandidateCore accepts a variety of heterogeneous data formats and synthesizes them into a clean, predictable output model.
 
+> [!NOTE]
+> **Why no direct LinkedIn or GitHub APIs?**
+> A core architectural decision of CandidateCore is to maintain absolute data sovereignty and zero external API dependencies for primary data ingestion. By forcing ingestion to happen via standard offline artifacts (like exported JSON dumps, PDFs, or CSVs), the engine avoids third-party rate limits, unexpected API deprecations, expensive enterprise API tier lock-ins, and data-sharing compliance risks. The system remains completely deterministic and locally runnable.
+
 ### 📥 Example Input: ATS JSON (`candidate.json`)
 ```json
 {
