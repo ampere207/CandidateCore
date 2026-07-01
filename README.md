@@ -19,6 +19,21 @@ CandidateCore executes a highly deterministic data pipeline to resolve conflicts
 
 ---
 
+## 🤝 Merge & Conflict Resolution
+
+When CandidateCore processes multiple sources for a single candidate, it inevitably encounters conflicting data (e.g., a recruiter CSV has a different email than the ATS JSON, or the Resume has a newer job title). The pipeline handles this deterministically based on the field type:
+
+1. **Scalar Fields (Names, Locations, etc.)**: 
+   The `ConflictResolver` evaluates all competing normalized values. It requests a score from the `ConfidenceEngine` for each competing value. The value with the highest mathematical confidence score is promoted to the final canonical profile. The "losing" values are not deleted; they are preserved inside the `CanonicalField` history audit trail for lineage explainability.
+
+2. **Collection Fields (Emails, Phones, Skills)**: 
+   The `MergeEngine` performs intelligent union deduplication. It normalizes all entries (e.g., converting phone numbers to E.164, stripping whitespace and casing from skills) and groups identical items. It then merges the collections, keeping the metadata of the highest confidence source that provided each unique item.
+
+3. **Complex Timelines (Experience, Education)**: 
+   Custom merger strategies are applied. For work experience, the engine normalizes company names and job titles. If multiple sources provide the same job (e.g., a Resume and an ATS), they are merged into a single entry. If one source has missing date ranges but another provides them, the engine stitches the dates together into a unified timeline.
+
+---
+
 ## 🧮 Confidence Scoring Heuristics
 
 The `ConfidenceEngine` calculates a mathematical certainty score (0.0 to 1.0) for every extracted field to systematically resolve conflicts across heterogeneous sources. The final score is computed using a multi-factor deterministic algorithm:
@@ -94,6 +109,79 @@ You will need two separate terminal windows to run both the backend and frontend
 3. Click **Run Pipeline**.
 4. The system will automatically detect the file types, extract, merge, and present the fully canonicalized profile alongside the provenance audit trail and semantic insights!
 5. Navigate to the Custom Export Projection section to rename and map specific fields into a clean output schema.
+
+---
+
+## 📊 Example Inputs & Output Schemas
+
+CandidateCore accepts a variety of heterogeneous data formats and synthesizes them into a clean, predictable output model.
+
+### 📥 Example Input: ATS JSON (`candidate.json`)
+```json
+{
+  "ats_id": "ATS-88219",
+  "candidate_profile": {
+    "first_name": "Rahul",
+    "last_name": "Sharma",
+    "emails": ["rahul.sharma@gmail.com"],
+    "skills": ["Python", "Docker", "Kubernetes"]
+  }
+}
+```
+
+### 📥 Example Input: Recruiter CSV (`candidate.csv`)
+```csv
+Candidate Name,Email,Phone,Current Company,Location
+Rahul Sharma,rahul.s@outlook.com,98765-43210,Razorpay,Bengaluru
+```
+
+### 📤 Final Projected Output (`CandidateOutput` Schema)
+After the pipeline extracts the inputs, merges them, resolves conflicts using confidence heuristics, and applies AI semantic enrichment, the `ProjectionEngine` flattens the heavy internal domain model into a clean, consumer-ready JSON structure:
+
+```json
+{
+  "candidate_id": "2b23101b-87a7-4cb6-bde3-43c2fe5cf54b",
+  "full_name": "Rahul Sharma",
+  "emails": [
+    "rahul.sharma@gmail.com",
+    "rahul.s@outlook.com"
+  ],
+  "phones": [
+    "+91 9876543210"
+  ],
+  "location": "Bengaluru, India",
+  "skills": [
+    "Python",
+    "Docker",
+    "Kubernetes"
+  ],
+  "experience": [
+    {
+      "company": "Razorpay",
+      "title": "Backend Engineer",
+      "dates": "Jan 2023 - Present"
+    }
+  ],
+  "education": [],
+  "metadata": {
+    "completeness_score": 0.85,
+    "resolved_sources_count": 4,
+    "merged_at": "2026-07-01T14:30:00Z",
+    "links": {
+      "linkedin": "https://linkedin.com/in/rahulsharma",
+      "github": "https://github.com/rahul-sharma-dev"
+    },
+    "headline": "Backend Engineer | Scalable Systems",
+    "semantic_enrichment_applied": true,
+    "semantic_enrichment": {
+      "success": true,
+      "professional_summary": "Strong backend developer with expertise in distributed systems...",
+      "core_strengths": ["System Design", "Microservices"],
+      "recruiter_insights": "Solid candidate. Good background in payments."
+    }
+  }
+}
+```
 
 ---
 
