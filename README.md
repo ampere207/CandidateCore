@@ -19,6 +19,31 @@ CandidateCore executes a highly deterministic data pipeline to resolve conflicts
 
 ---
 
+## 🧮 Confidence Scoring Heuristics
+
+The `ConfidenceEngine` calculates a mathematical certainty score (0.0 to 1.0) for every extracted field to systematically resolve conflicts across heterogeneous sources. The final score is computed using a multi-factor deterministic algorithm:
+
+1. **Base Source Reliability:**
+   Every field starts with a base score depending on its origin:
+   * **ATS JSON (`ats_json`)**: `0.95` (Highest trust, structured system of record)
+   * **Resume PDF (`resume_pdf`)**: `0.85` (High trust, primary candidate artifact)
+   * **Recruiter CSV (`recruiter_csv`)**: `0.75` (Medium trust, prone to manual entry errors)
+   * **Recruiter Notes (`recruiter_notes`)**: `0.60` (Lowest trust, unstructured qualitative data)
+
+2. **Validation Penalties:**
+   * **`-0.20` Penalty**: Applied if the field triggered any schema validation warnings (e.g., malformed email, missing required attributes).
+
+3. **Normalization Adjustments:**
+   * **`+0.05` Bonus**: Awarded if the field was successfully normalized into a standard format.
+   * **`-0.15` Penalty**: Applied if normalization failed and the engine had to fall back to the raw payload string.
+
+4. **Consensus Agreement Bonus:**
+   * **`+0.10` Bonus (per matching source)**: Awarded for every *other* source that independently provided the exact same normalized value. Capped at a maximum bonus of `+0.20`.
+
+The final aggregated score is bounded between `[0.0, 1.0]` and rounded to two decimal places to guarantee determinism. The Conflict Resolver then simply promotes the competing field with the highest confidence score to the Canonical Profile.
+
+---
+
 ## 🏗️ Core Architecture Principles
 
 * **Separation of Concerns:** The engine strictly separates the internal rich domain model (which holds provenance, confidence, and conflict metadata) from the external output model (which consumers use).
